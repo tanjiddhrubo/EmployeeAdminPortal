@@ -1,10 +1,11 @@
-﻿using Dapper;
+using Dapper;
 using EmployeeAdminPortal.API.Models.Entities;
 using EmployeeAdminPortal.Data;
 using EmployeeAdminPortal.Repositories.Interfaces;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using System;
+using System.Data;
 using System.Data.SqlClient;
 using System.Linq;
 using System.Threading.Tasks;
@@ -20,33 +21,27 @@ namespace EmployeeAdminPortal.Repositories.Implementations
         {
             _context = context;
             _connectionString = configuration.GetConnectionString("DefaultConnection")
-                                ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
+                                 ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
         }
 
         public async Task<IEnumerable<Employee>> GetAllAsync()
         {
-            var sql = @"
-                SELECT 
-                    E.*, 
-                    D.Id AS DepartmentId, D.Name AS DepartmentName, 
-                    G.Id AS DesignationId, G.Name AS DesignationName
-                FROM dbo.Employees E
-                INNER JOIN dbo.Departments D ON E.DepartmentId = D.Id
-                INNER JOIN dbo.Designations G ON E.DesignationId = G.Id";
+            const string storedProcedureName = "dbo.usp_GetAllEmployees";
 
             using (var connection = new SqlConnection(_connectionString))
             {
                 await connection.OpenAsync();
 
                 var employees = await connection.QueryAsync<Employee, Department, Designation, Employee>(
-                    sql,
+                    storedProcedureName,
                     (employee, department, designation) =>
                     {
                         employee.Department = department;
                         employee.Designation = designation;
                         return employee;
                     },
-                    splitOn: "DepartmentId, DesignationId"
+                    splitOn: "DepartmentName,DesignationName",
+                    commandType: CommandType.StoredProcedure
                 );
 
                 return employees;
@@ -56,14 +51,14 @@ namespace EmployeeAdminPortal.Repositories.Implementations
         public async Task<Employee?> GetByIdAsync(Guid id)
         {
             var sql = @"
-                SELECT 
-                    E.*, 
-                    D.Id AS DepartmentId, D.Name AS DepartmentName, 
-                    G.Id AS DesignationId, G.Name AS DesignationName
-                FROM dbo.Employees E
-                INNER JOIN dbo.Departments D ON E.DepartmentId = D.Id
-                INNER JOIN dbo.Designations G ON E.DesignationId = G.Id
-                WHERE E.Id = @EmployeeId";
+                 SELECT 
+                     E.Id, E.Name AS FullName, E.Email, E.Phone, E.Salary, E.DepartmentId, E.DesignationId,
+                     D.Id AS DepartmentIdSplit, D.Name AS DepartmentName, 
+                     G.Id AS DesignationIdSplit, G.Name AS DesignationName
+                 FROM dbo.Employees E
+                 INNER JOIN dbo.Departments D ON E.DepartmentId = D.Id
+                 INNER JOIN dbo.Designations G ON E.DesignationId = G.Id
+                 WHERE E.Id = @EmployeeId";
 
             using (var connection = new SqlConnection(_connectionString))
             {
@@ -78,7 +73,7 @@ namespace EmployeeAdminPortal.Repositories.Implementations
                         return employee;
                     },
                     param: new { EmployeeId = id },
-                    splitOn: "DepartmentId, DesignationId"
+                    splitOn: "DepartmentIdSplit, DesignationIdSplit"
                 );
 
                 return employee.FirstOrDefault();

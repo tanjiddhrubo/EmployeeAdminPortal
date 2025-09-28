@@ -1,4 +1,4 @@
-﻿using AutoMapper;
+using AutoMapper;
 using EmployeeAdminPortal.API.Models.Entities;
 using EmployeeAdminPortal.Models;
 
@@ -8,12 +8,9 @@ namespace EmployeeAdminPortal.Profiles
     {
         public EmployeeProfile()
         {
-            
-           
             CreateMap<AddEmployeeDto, Employee>().ReverseMap();
             CreateMap<UpdateEmployeeDto, Employee>().ReverseMap();
 
-           
             CreateMap<Employee, EmployeeDto>()
                 .ForMember(dest => dest.DepartmentName,
                            opt => opt.MapFrom(src => src.Department.Name))

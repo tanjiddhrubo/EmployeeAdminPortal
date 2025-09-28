@@ -1,4 +1,4 @@
-﻿using EmployeeAdminPortal.Models;
+using EmployeeAdminPortal.Models;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;

@@ -1,4 +1,4 @@
-﻿// File: Models/DesignationDto.cs
+// File: Models/DesignationDto.cs
 namespace EmployeeAdminPortal.Models
 {
     public class DesignationDto

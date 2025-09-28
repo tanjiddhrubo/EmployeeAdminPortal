@@ -1,4 +1,4 @@
-﻿// File: Models/UpdateDepartmentDto.cs
+// File: Models/UpdateDepartmentDto.cs
 namespace EmployeeAdminPortal.Models
 {
     public class UpdateDepartmentDto

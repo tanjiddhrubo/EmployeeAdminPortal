@@ -1,4 +1,4 @@
-﻿// File: Repositories/Interfaces/IDesignationRepository.cs
+// File: Repositories/Interfaces/IDesignationRepository.cs
 
 using EmployeeAdminPortal.API.Models.Entities;
 

@@ -1,11 +1,13 @@
-﻿using AutoMapper;
-using EmployeeAdminPortal.API.Models.Entities;
+using AutoMapper;
 using EmployeeAdminPortal.Models;
+using EmployeeAdminPortal.API.Models.Entities;
 using EmployeeAdminPortal.Repositories.Interfaces;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace EmployeeAdminPortal.Controllers
 {
+    [Authorize]
     [Route("api/[controller]")]
     [ApiController]
     public class EmployeesController : ControllerBase
@@ -58,7 +60,7 @@ namespace EmployeeAdminPortal.Controllers
         }
 
         [HttpPut]
-        [Route("{id:guid}")]
+        [Route("{id:guid")]
         public async Task<IActionResult> UpdateEmployee([FromRoute] Guid id, UpdateEmployeeDto updateEmployeeDto)
         {
             var employeeEntity = _mapper.Map<Employee>(updateEmployeeDto);

@@ -1,4 +1,4 @@
-﻿using EmployeeAdminPortal.API.Models.Entities;
+using EmployeeAdminPortal.API.Models.Entities;
 
 namespace EmployeeAdminPortal.Repositories.Interfaces
 {

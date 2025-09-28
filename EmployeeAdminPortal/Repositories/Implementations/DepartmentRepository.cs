@@ -1,4 +1,4 @@
-﻿// File: Repositories/Implementations/DepartmentRepository.cs
+// File: Repositories/Implementations/DepartmentRepository.cs
 
 using Dapper; // Required for Dapper methods
 using EmployeeAdminPortal.Data;
@@ -22,7 +22,7 @@ namespace EmployeeAdminPortal.Repositories.Implementations
                                 ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
         }
 
-        // ⭐️ REFACTORED: Use Dapper for GetAllAsync ⭐️
+        // ?? REFACTORED: Use Dapper for GetAllAsync ??
         public async Task<IEnumerable<Department>> GetAllAsync()
         {
             var sql = "SELECT * FROM dbo.Departments";
@@ -34,7 +34,7 @@ namespace EmployeeAdminPortal.Repositories.Implementations
             }
         }
 
-        // ⭐️ REFACTORED: Use Dapper for GetByIdAsync ⭐️
+        // ?? REFACTORED: Use Dapper for GetByIdAsync ??
         public async Task<Department?> GetByIdAsync(Guid id)
         {
             var sql = "SELECT * FROM dbo.Departments WHERE Id = @Id";
