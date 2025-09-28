@@ -1,96 +1,92 @@
-﻿using EmployeeAdminPortal.API.Models.Entities;
+﻿using AutoMapper;
+using EmployeeAdminPortal.API.Models.Entities;
 using EmployeeAdminPortal.Models;
-using EmployeeAdminPortal.Data;
-using Microsoft.AspNetCore.Http;
+using EmployeeAdminPortal.Repositories.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 
 namespace EmployeeAdminPortal.Controllers
 {
-
-    //locahost:xxxx/api/employees
     [Route("api/[controller]")]
     [ApiController]
     public class EmployeesController : ControllerBase
-    {   private readonly ApplicationDbContext dbContext;
-        public EmployeesController(ApplicationDbContext dbContext)
+    {
+        private readonly IEmployeeRepository _employeeRepository;
+        private readonly IMapper _mapper;
+
+        public EmployeesController(IEmployeeRepository employeeRepository, IMapper mapper)
         {
-            this.dbContext = dbContext;
+            _employeeRepository = employeeRepository;
+            _mapper = mapper;
         }
 
         [HttpGet]
-        public IActionResult GetAllEmployees()
+        public async Task<IActionResult> GetAllEmployees()
         {
-            var allEmployees = dbContext.Employees.ToList();
-            return Ok(allEmployees);
+            var employeeEntities = await _employeeRepository.GetAllAsync();
+
+            var employeeDtos = _mapper.Map<List<EmployeeDto>>(employeeEntities);
+
+            return Ok(employeeDtos);
         }
+
         [HttpGet]
-        
         [Route("{id:guid}")]
-        public IActionResult GetEmployeeById(Guid id)
+        public async Task<IActionResult> GetEmployeeById(Guid id)
         {
-            var employee = dbContext.Employees.Find(id);
-            if (employee is null)
+            var employeeEntity = await _employeeRepository.GetByIdAsync(id);
+
+            if (employeeEntity is null)
             {
                 return NotFound();
             }
-            return Ok(employee);
-        }
 
-        
+            var employeeDto = _mapper.Map<EmployeeDto>(employeeEntity);
+
+            return Ok(employeeDto);
+        }
 
         [HttpPost]
-        public IActionResult AddEmployee(AddEmployeeDto addEmployeeDto)
+        public async Task<IActionResult> AddEmployee(AddEmployeeDto addEmployeeDto)
         {
-            var department = dbContext.Departments.Find(addEmployeeDto.DepartmentId);
-            var designation = dbContext.Designations.Find(addEmployeeDto.DesignationId);
-            if (department == null || designation == null)
-            {
-                return BadRequest("Invalid DepartmentId or DesignationId.");
-            }
-            var employeeEntity = new Employee() {
-                Name = addEmployeeDto.Name,
-                Email = addEmployeeDto.Email,
-                Phone = addEmployeeDto.Phone,
-                Salary = addEmployeeDto.Salary,
-                DepartmentId = addEmployeeDto.DepartmentId,
-                Department = department,
-                DesignationId = addEmployeeDto.DesignationId,
-                Designation = designation
-            };
-            dbContext.Employees.Add(employeeEntity);
-            dbContext.SaveChanges();
-            return Ok(employeeEntity);
+            var employeeEntity = _mapper.Map<Employee>(addEmployeeDto);
+
+            var newEmployee = await _employeeRepository.AddAsync(employeeEntity);
+
+            var newEmployeeDto = _mapper.Map<EmployeeDto>(newEmployee);
+
+            return CreatedAtAction(nameof(GetEmployeeById), new { id = newEmployeeDto.Id }, newEmployeeDto);
         }
+
         [HttpPut]
-        public IActionResult UpdateEmployee(Guid id,UpdateEmployeeDto updateEmployeeDto)
+        [Route("{id:guid}")]
+        public async Task<IActionResult> UpdateEmployee([FromRoute] Guid id, UpdateEmployeeDto updateEmployeeDto)
         {
-            var employee = dbContext.Employees.Find(id);
-            if (employee is null)
+            var employeeEntity = _mapper.Map<Employee>(updateEmployeeDto);
+
+            var updatedEmployee = await _employeeRepository.UpdateAsync(id, employeeEntity);
+
+            if (updatedEmployee is null)
             {
                 return NotFound();
             }
-            employee.Name = updateEmployeeDto.Name;
-            employee.Email = updateEmployeeDto.Email;  
-            employee.Phone = updateEmployeeDto.Phone;
-            employee.Salary = updateEmployeeDto.Salary;
 
-            dbContext.SaveChanges();
+            var updatedEmployeeDto = _mapper.Map<EmployeeDto>(updatedEmployee);
 
-            return Ok(employee);
+            return Ok(updatedEmployeeDto);
         }
 
         [HttpDelete]
         [Route("{id:guid}")]
-        public IActionResult DeleteEmployee(Guid id)
+        public async Task<IActionResult> DeleteEmployee(Guid id)
         {
-            var employee = dbContext.Employees.Find(id);
+            var employee = await _employeeRepository.DeleteAsync(id);
+
             if (employee is null)
             {
                 return NotFound();
             }
-            dbContext.Employees.Remove(employee);
-            dbContext.SaveChanges();
-            return Ok();
+
+            return NoContent();
         }
     }
 }

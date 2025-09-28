@@ -4,6 +4,8 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.CodeAnalysis.Options;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using EmployeeAdminPortal.Repositories.Interfaces;
+using EmployeeAdminPortal.Repositories.Implementations;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -49,6 +51,11 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("AdminPolicy", policy => policy.RequireRole("Admin"));
     options.AddPolicy("UserPolicy", policy => policy.RequireRole("User"));
 });
+
+builder.Services.AddScoped<IEmployeeRepository, EmployeeRepository>();
+builder.Services.AddScoped<IDepartmentRepository, DepartmentRepository>();
+builder.Services.AddScoped<IDesignationRepository, DesignationRepository>();
+builder.Services.AddAutoMapper(typeof(Program).Assembly);
 
 var app = builder.Build();
 
