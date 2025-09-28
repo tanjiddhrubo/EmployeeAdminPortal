@@ -1,6 +1,6 @@
-﻿using EmployeeAdminPortal.Data;
+﻿using EmployeeAdminPortal.API.Models.Entities;
 using EmployeeAdminPortal.Models;
-using EmployeeAdminPortal.Models.Entities;
+using EmployeeAdminPortal.Data;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
@@ -41,11 +41,21 @@ namespace EmployeeAdminPortal.Controllers
         [HttpPost]
         public IActionResult AddEmployee(AddEmployeeDto addEmployeeDto)
         {
+            var department = dbContext.Departments.Find(addEmployeeDto.DepartmentId);
+            var designation = dbContext.Designations.Find(addEmployeeDto.DesignationId);
+            if (department == null || designation == null)
+            {
+                return BadRequest("Invalid DepartmentId or DesignationId.");
+            }
             var employeeEntity = new Employee() {
                 Name = addEmployeeDto.Name,
                 Email = addEmployeeDto.Email,
                 Phone = addEmployeeDto.Phone,
-                Salary = addEmployeeDto.Salary
+                Salary = addEmployeeDto.Salary,
+                DepartmentId = addEmployeeDto.DepartmentId,
+                Department = department,
+                DesignationId = addEmployeeDto.DesignationId,
+                Designation = designation
             };
             dbContext.Employees.Add(employeeEntity);
             dbContext.SaveChanges();
@@ -59,7 +69,6 @@ namespace EmployeeAdminPortal.Controllers
             {
                 return NotFound();
             }
-            return NotFound();
             employee.Name = updateEmployeeDto.Name;
             employee.Email = updateEmployeeDto.Email;  
             employee.Phone = updateEmployeeDto.Phone;
