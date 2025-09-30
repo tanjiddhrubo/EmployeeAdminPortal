@@ -1,0 +1,153 @@
+﻿@using EmployeeAdminClient.Models
+@using Microsoft.AspNetCore.Http
+@{
+    ViewData["Title"] = "Employee List";
+}
+
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h1>Employee List</h1>
+        <button id="addEmployeeBtn" class="btn btn-success" onclick="location.href='@Url.Action("AddEdit", "Employee")'">
+            <i class="fas fa-plus"></i> Add New Employee
+        </button>
+    </div>
+
+    <table class="table table-bordered table-striped" id="employeeTable">
+        <thead>
+            <tr>
+                <th>Full Name</th>
+                <th>Email</th>
+                <th>Phone</th>
+                <th>Salary</th>
+                <th>Department</th>
+                <th>Designation</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr><td colspan="7" class="text-center">Loading employees...</td></tr>
+        </tbody>
+    </table>
+</div>
+
+@section Scripts {
+    <script>
+        // Store the API Base URL from the ViewBag
+        const API_BASE_URL = '@ViewBag.ApiBaseUrl';
+
+        // Retrieve the JWT token from the session using Razor
+        // This is correct: it pulls the token saved by the client's AuthController
+        const JWT_TOKEN = "@Context.Session.GetString("JwtToken")";
+
+
+        // ⭐️ CORE AJAX FUNCTION: Fetch all employees ⭐️
+        function loadEmployees() {
+            const $tbody = $('#employeeTable tbody');
+            $tbody.html('<tr><td colspan="7" class="text-center">Loading employees...</td></tr>'); // Loading message
+
+            $.ajax({
+                // CRITICAL FIX: Ensure the route is plural to match EmployeesController.cs
+                url: API_BASE_URL + '/api/employees',
+                method: 'GET',
+                contentType: 'application/json',
+
+                // CRITICAL: Attach the Authorization header
+                headers: {
+                    'Authorization': 'Bearer ' + JWT_TOKEN
+                },
+
+                success: function(employees) {
+                    $tbody.empty(); // Clear loading message
+
+                    if (employees.length === 0) {
+                        $tbody.append('<tr><td colspan="7" class="text-center">No employees found.</td></tr>');
+                        return;
+                    }
+
+                    // The employees variable likely contains a JSON string from the API proxy,
+                    // so we need to parse it if it wasn't automatically done by jQuery
+                    const employeeData = (typeof employees === 'string') ? JSON.parse(employees) : employees;
+
+                    $.each(employeeData, function(index, employee) {
+                        // NOTE: Ensure property names match your API Employee DTO (fullName, departmentName, etc.)
+                        const row = `
+                            <tr data-id="${employee.id}">
+                                <td>${employee.fullName}</td>
+                                <td>${employee.email}</td>
+                                <td>${employee.phone}</td>
+                                <td>$${employee.salary.toFixed(2)}</td>
+                                <td>${employee.departmentName || 'N/A'}</td>
+                                <td>${employee.designationName || 'N/A'}</td>
+                                <td>
+                                    <button class="btn btn-sm btn-info edit-btn" data-id="${employee.id}">
+                                        <i class="fas fa-edit"></i> Edit
+                                    </button>
+                                    <button class="btn btn-sm btn-danger delete-btn" data-id="${employee.id}" data-name="${employee.fullName}">
+                                        <i class="fas fa-trash"></i> Delete
+                                    </button>
+                                </td>
+                            </tr>
+                        `;
+                        $tbody.append(row);
+                    });
+                },
+                error: function(xhr) {
+                    console.error("Error loading employees:", xhr);
+
+                    // Show the specific status to the user for better debugging
+                    alert("Failed to load employee data. API Status: " + xhr.status);
+
+                    // If 401 Unauthorized, redirect to login/logout
+                    if (xhr.status === 401) {
+                        location.href = '@Url.Action("Logout", "Auth")';
+                    } else {
+                        $tbody.html('<tr><td colspan="7" class="text-danger text-center">Error loading data. See console.</td></tr>');
+                    }
+                }
+            });
+        }
+
+        // ⭐️ DELETE AJAX FUNCTION ⭐️
+        $(document).on('click', '.delete-btn', function() {
+            const employeeId = $(this).data('id');
+            const employeeName = $(this).data('name');
+
+            if (confirm(`Are you sure you want to delete employee: ${employeeName}?`)) {
+                $.ajax({
+                    // CRITICAL FIX: Ensure the route is plural
+                    url: API_BASE_URL + '/api/employees/' + employeeId,
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': 'Bearer ' + JWT_TOKEN
+                    },
+                    success: function() {
+                        alert(`${employeeName} deleted successfully.`);
+                        loadEmployees(); // Reload the list after delete
+                    },
+                    error: function(xhr) {
+                        alert(`Failed to delete employee: ${xhr.responseText || xhr.statusText}. Status: ${xhr.status}`);
+                        console.error("Delete error:", xhr);
+                    }
+                });
+            }
+        });
+
+        // ⭐️ EDIT ROUTING FUNCTION ⭐️
+        $(document).on('click', '.edit-btn', function() {
+            const employeeId = $(this).data('id');
+            // Redirects to the AddEdit view with the employee ID for editing
+            location.href = '@Url.Action("AddEdit", "Employee")/' + employeeId;
+        });
+
+
+        $(document).ready(function() {
+            // Check if token is available
+            if (JWT_TOKEN) {
+                loadEmployees();
+            } else {
+                 // If the token is empty (which should have been caught by the C# controller), redirect
+                 location.href = '@Url.Action("Logout", "Auth")';
+            }
+        });
+    </script>
+}

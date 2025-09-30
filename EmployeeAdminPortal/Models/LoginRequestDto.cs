@@ -1,4 +1,4 @@
-// File: Models/DTOs/LoginRequestDto.cs
+﻿// File: Models/DTOs/LoginRequestDto.cs
 
 using System.ComponentModel.DataAnnotations;
 
@@ -8,10 +8,12 @@ namespace EmployeeAdminPortal.Models.DTOs
     {
         [Required]
         [DataType(DataType.EmailAddress)]
-        public string Username { get; set; } = string.Empty;
+        // FIX: Removed = string.Empty; and added 'required'
+        public required string Username { get; set; }
 
         [Required]
         [DataType(DataType.Password)]
-        public string Password { get; set; } = string.Empty;
+        // FIX: Removed = string.Empty; and added 'required'
+        public required string Password { get; set; }
     }
 }

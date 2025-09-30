@@ -60,7 +60,7 @@ namespace EmployeeAdminPortal.Controllers
         }
 
         [HttpPut]
-        [Route("{id:guid")]
+        [Route("{id:guid}")]
         public async Task<IActionResult> UpdateEmployee([FromRoute] Guid id, UpdateEmployeeDto updateEmployeeDto)
         {
             var employeeEntity = _mapper.Map<Employee>(updateEmployeeDto);

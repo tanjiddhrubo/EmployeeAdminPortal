@@ -1,4 +1,4 @@
-// File: Controllers/AuthController.cs
+﻿// File: Controllers/AuthController.cs
 
 using EmployeeAdminPortal.Models.DTOs;
 using Microsoft.AspNetCore.Identity;
@@ -17,7 +17,6 @@ namespace EmployeeAdminPortal.Controllers
         private readonly UserManager<IdentityUser> _userManager;
         private readonly IConfiguration _configuration;
 
-        // Inject UserManager (for user registration/login) and IConfiguration (for JWT settings)
         public AuthController(UserManager<IdentityUser> userManager, IConfiguration configuration)
         {
             _userManager = userManager;
@@ -32,14 +31,14 @@ namespace EmployeeAdminPortal.Controllers
             var identityUser = new IdentityUser
             {
                 UserName = registerRequestDto.Username,
-                Email = registerRequestDto.Username
+                Email = registerRequestDto.Email // Use the correct DTO property for Email
             };
 
             var identityResult = await _userManager.CreateAsync(identityUser, registerRequestDto.Password);
 
             if (identityResult.Succeeded)
             {
-                // Optional: Assign a default role (e.g., "User")
+                // Assign "User" role to every registered user
                 await _userManager.AddToRoleAsync(identityUser, "User");
 
                 return Ok("User registered successfully! You can now log in.");
@@ -53,9 +52,26 @@ namespace EmployeeAdminPortal.Controllers
         [Route("login")]
         public async Task<IActionResult> Login([FromBody] LoginRequestDto loginRequestDto)
         {
-            var user = await _userManager.FindByNameAsync(loginRequestDto.Username);
+            // ⭐️ FIX: Check if the input is an email, and try to find the user by email first,
+            // otherwise, fall back to finding by username.
+            IdentityUser? user;
+            if (loginRequestDto.Username.Contains("@"))
+            {
+                user = await _userManager.FindByEmailAsync(loginRequestDto.Username);
+            }
+            else
+            {
+                user = await _userManager.FindByNameAsync(loginRequestDto.Username);
+            }
 
-            if (user != null && await _userManager.CheckPasswordAsync(user, loginRequestDto.Password))
+            // If user is null after checking both, return Unauthorized
+            if (user == null)
+            {
+                return Unauthorized("Login failed. Invalid credentials.");
+            }
+
+            // Check the password
+            if (await _userManager.CheckPasswordAsync(user, loginRequestDto.Password))
             {
                 var token = await GenerateJwtToken(user);
 
@@ -69,7 +85,7 @@ namespace EmployeeAdminPortal.Controllers
         {
             var key = _configuration["Jwt:Key"] ?? throw new InvalidOperationException("JWT Key not found.");
             var issuer = _configuration["Jwt:Issuer"] ?? throw new InvalidOperationException("JWT Issuer not found.");
-            var audience = _configuration["Jwt:Audience"] ?? throw new InvalidOperationException("JWT Audience not found.");
+            var audience = _configuration["Jwt:Audience"] ?? throw new InvalidOperationException("JWT Audience not found."); // ⭐️ ADDED: Audience check
 
             var claims = new List<Claim>
             {
@@ -92,7 +108,7 @@ namespace EmployeeAdminPortal.Controllers
             {
                 Subject = new ClaimsIdentity(claims),
                 Issuer = issuer,
-                Audience = audience,
+                Audience = audience, // ⭐️ ADDED: Set the Audience
                 Expires = DateTime.Now.AddDays(7), // Token expiration time
                 SigningCredentials = credentials
             };

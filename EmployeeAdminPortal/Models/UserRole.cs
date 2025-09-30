@@ -1,8 +1,11 @@
-namespace EmployeeAdminPortal.Models
+﻿namespace EmployeeAdminPortal.Models
 {
     public class UserRole
     {
-        public string Username { get; set; } = string.Empty;
-        public string Role { get; set; } = string.Empty;
+        // FIX: Removed = string.Empty; and added 'required'
+        public required string Username { get; set; }
+
+        // FIX: Removed = string.Empty; and added 'required'
+        public required string Role { get; set; }
     }
 }

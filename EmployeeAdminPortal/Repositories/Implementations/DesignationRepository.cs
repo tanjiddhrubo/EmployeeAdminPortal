@@ -1,4 +1,4 @@
-// File: Repositories/Implementations/DesignationRepository.cs
+﻿// File: Repositories/Implementations/DesignationRepository.cs
 
 using Dapper; // Required for Dapper methods
 using EmployeeAdminPortal.Data;

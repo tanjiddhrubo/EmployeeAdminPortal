@@ -1,4 +1,4 @@
-using EmployeeAdminPortal.Data;
+﻿using EmployeeAdminPortal.Data;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -7,10 +7,26 @@ using EmployeeAdminPortal.Repositories.Interfaces;
 using EmployeeAdminPortal.Repositories.Implementations;
 using System.Text;
 using AutoMapper;
-using EmployeeAdminPortal; // ?? NEW USING: For RoleInitializer
+using EmployeeAdminPortal; // Needed for RoleInitializer and DataSeeder
 
 var builder = WebApplication.CreateBuilder(args);
 
+// -----------------------------------------------------------
+// ⭐️ START CORS CONFIGURATION (Services) ⭐️
+// -----------------------------------------------------------
+builder.Services.AddCors(options =>
+{
+    options.AddDefaultPolicy(policy =>
+    {
+        // CRUCIAL: Allow the Client MVC App's origin (port 7277) to connect.
+        policy.WithOrigins("https://localhost:7277")
+              .AllowAnyHeader()
+              .AllowAnyMethod();
+    });
+});
+// -----------------------------------------------------------
+// ⭐️ END CORS CONFIGURATION (Services) ⭐️
+// -----------------------------------------------------------
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
@@ -78,23 +94,31 @@ builder.Services.AddAutoMapper(typeof(Program).Assembly);
 
 var app = builder.Build();
 
-// ?? START ROLE SEEDING LOGIC ??
+// -----------------------------------------------------------
+// ⭐️ START SEEDING LOGIC: Roles, Departments, and Designations
+// -----------------------------------------------------------
 using (var scope = app.Services.CreateScope())
 {
     var serviceProvider = scope.ServiceProvider;
     try
     {
-        // This line calls the static method to create the roles
+        // 1. Seed Roles (existing code)
         RoleInitializer.SeedRolesAsync(serviceProvider).Wait();
+
+        // 2. ⭐️ NEW: Seed Department and Designation Data ⭐️
+        var context = serviceProvider.GetRequiredService<ApplicationDbContext>();
+        DataSeeder.SeedLookupData(context).Wait();
     }
     catch (Exception ex)
     {
         // Optional: Log the error if seeding fails
         var logger = serviceProvider.GetRequiredService<ILogger<Program>>();
-        logger.LogError(ex, "An error occurred while seeding roles.");
+        logger.LogError(ex, "An error occurred while seeding roles or lookup data.");
     }
 }
-// ?? END ROLE SEEDING LOGIC ??
+// -----------------------------------------------------------
+// ⭐️ END SEEDING LOGIC
+// -----------------------------------------------------------
 
 if (app.Environment.IsDevelopment())
 {
@@ -104,6 +128,8 @@ if (app.Environment.IsDevelopment())
 app.UseStaticFiles();
 app.UseHttpsRedirection();
 
+// ⭐️ CRITICAL: Add UseCors() here, before UseAuthentication() ⭐️
+app.UseCors();
 
 app.UseAuthentication();
 app.UseAuthorization();

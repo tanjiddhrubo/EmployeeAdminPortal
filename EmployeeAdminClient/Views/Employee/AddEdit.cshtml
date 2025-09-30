@@ -1,0 +1,229 @@
+﻿@using EmployeeAdminClient.Models
+@using Microsoft.AspNetCore.Http
+@{
+    // Retrieve the employee ID passed from the controller (null if adding)
+    Guid? employeeId = ViewBag.EmployeeId as Guid?;
+    bool isEditing = employeeId.HasValue;
+
+    ViewData["Title"] = isEditing ? "Edit Employee" : "Add New Employee";
+}
+
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <h1 class="mb-4">@ViewData["Title"]</h1>
+
+            <form id="employeeForm" class="p-4 border rounded shadow-sm">
+                <input type="hidden" id="EmployeeId" name="Id" value="@(isEditing? employeeId : Guid.Empty)" />
+                <input type="hidden" id="DepartmentId" name="DepartmentId" value="" />
+                <input type="hidden" id="DesignationId" name="DesignationId" value="" />
+
+                <div class="mb-3">
+                    <label for="FullName" class="form-label">Full Name</label>
+                    <input type="text" class="form-control" id="FullName" name="FullName" required>
+                </div>
+
+                <div class="mb-3">
+                    <label for="Email" class="form-label">Email</label>
+                    <input type="email" class="form-control" id="Email" name="Email" required>
+                </div>
+
+                <div class="mb-3">
+                    <label for="Phone" class="form-label">Phone</label>
+                    <input type="text" class="form-control" id="Phone" name="Phone">
+                </div>
+
+                <div class="mb-3">
+                    <label for="Salary" class="form-label">Salary</label>
+                    <input type="number" step="0.01" class="form-control" id="Salary" name="Salary" required>
+                </div>
+
+                <div class="mb-3">
+                    <label for="DepartmentSelect" class="form-label">Department</label>
+                    <select class="form-select" id="DepartmentSelect" required>
+                        <option value="">-- Select Department --</option>
+                    </select>
+                </div>
+
+                <div class="mb-3">
+                    <label for="DesignationSelect" class="form-label">Designation</label>
+                    <select class="form-select" id="DesignationSelect" required>
+                        <option value="">-- Select Designation --</option>
+                    </select>
+                </div>
+
+                <button type="submit" id="saveButton" class="btn btn-primary">
+                    <i class="fas fa-save"></i> @(isEditing ? "Save Changes" : "Create Employee")
+                </button>
+                <a href="@Url.Action("Index", "Employee")" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left"></i> Back to List
+                </a>
+
+                <div id="message" class="mt-3"></div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        const API_BASE_URL = '@ViewBag.ApiBaseUrl';
+        const JWT_TOKEN = "@Context.Session.GetString("JwtToken")";
+        const EMPLOYEE_ID = '@employeeId';
+        const IS_EDITING = @isEditing.ToString().ToLower();
+
+        $(document).ready(function() {
+            if (!JWT_TOKEN) {
+                location.href = '@Url.Action("Logout", "Auth")';
+                return;
+            }
+
+            // 1. Load Dropdowns (Departments and Designations)
+            loadDropdowns();
+
+            // 2. Load Employee Data if Editing
+            if (IS_EDITING && EMPLOYEE_ID) {
+                loadEmployeeData(EMPLOYEE_ID);
+            }
+
+            // 3. Handle Form Submission
+            $('#employeeForm').on('submit', handleFormSubmit);
+
+            // Link selects to hidden inputs (for sending the form data)
+            $('#DepartmentSelect').on('change', function() {
+                $('#DepartmentId').val($(this).val());
+            });
+            $('#DesignationSelect').on('change', function() {
+                $('#DesignationId').val($(this).val());
+            });
+        });
+
+        // ⭐️ LOAD DROPDOWNS ⭐️
+        function loadDropdowns() {
+            // Function to fetch and populate options
+            const fetchAndPopulate = (url, $select) => {
+                $.ajax({
+                    url: API_BASE_URL + url,
+                    method: 'GET',
+                    headers: { 'Authorization': 'Bearer ' + JWT_TOKEN },
+                    success: function(data) {
+                        // Handle the case where the data is a string (due to API proxy) and parse it
+                        const parsedData = (typeof data === 'string') ? JSON.parse(data) : data;
+
+                        $.each(parsedData, function(index, item) {
+                            $select.append(new Option(item.name, item.id));
+                        });
+
+                        // After populating, if in edit mode, re-set the values
+                        if (IS_EDITING && EMPLOYEE_ID) {
+                            // This ensures the dropdown values are correctly selected after they've been loaded
+                            // This relies on loadEmployeeData having been called or calling it now
+                            // For simplicity, we keep the original flow and trust loadEmployeeData is called
+                        }
+
+                    },
+                    error: function(xhr) {
+                        console.error("Error loading dropdown:", url, xhr);
+                        alert(`Failed to load data for ${url}. Check API status (${xhr.status}).`);
+                        // If Unauthorized, redirect to login
+                        if (xhr.status === 401) {
+                            location.href = '@Url.Action("Logout", "Auth")';
+                        }
+                    }
+                });
+            };
+
+            // 🚨 FIX: Call the correct /api/lookup/departments and /api/lookup/designations routes
+            fetchAndPopulate('/api/lookup/departments', $('#DepartmentSelect'));
+            fetchAndPopulate('/api/lookup/designations', $('#DesignationSelect'));
+        }
+
+        // ⭐️ LOAD EMPLOYEE DATA FOR EDIT ⭐️
+        function loadEmployeeData(id) {
+            $.ajax({
+                url: API_BASE_URL + '/api/employees/' + id,
+                method: 'GET',
+                headers: { 'Authorization': 'Bearer ' + JWT_TOKEN },
+                success: function(data) {
+                    const employeeData = (typeof data === 'string') ? JSON.parse(data) : data;
+
+                    $('#FullName').val(employeeData.fullName);
+                    $('#Email').val(employeeData.email);
+                    $('#Phone').val(employeeData.phone);
+                    $('#Salary').val(employeeData.salary);
+
+                    // Set the correct dropdown values and hidden IDs (This now relies on the dropdowns being loaded)
+                    $('#DepartmentSelect').val(employeeData.departmentId);
+                    $('#DesignationSelect').val(employeeData.designationId);
+                    $('#DepartmentId').val(employeeData.departmentId);
+                    $('#DesignationId').val(employeeData.designationId);
+                },
+                error: function(xhr) {
+                    console.error("Error loading employee:", xhr);
+                    alert("Failed to load employee details.");
+                    location.href = '@Url.Action("Index", "Employee")';
+                }
+            });
+        }
+
+        // ⭐️ HANDLE FORM SUBMISSION (POST or PUT) ⭐️
+        function handleFormSubmit(e) {
+            e.preventDefault();
+            $('#message').empty();
+
+            // Basic client-side validation check
+            if ($('#DepartmentId').val() === "" || $('#DesignationId').val() === "") {
+                $('#message').html('<div class="alert alert-danger">Please select a Department and Designation.</div>');
+                return;
+            }
+
+            const employeeData = {
+                id: IS_EDITING ? EMPLOYEE_ID : null,
+                fullName: $('#FullName').val(),
+                email: $('#Email').val(),
+                phone: $('#Phone').val(),
+                salary: parseFloat($('#Salary').val()),
+                departmentId: $('#DepartmentId').val(),
+                designationId: $('#DesignationId').val()
+            };
+
+            const apiUrl = API_BASE_URL + '/api/employees' + (IS_EDITING ? '/' + EMPLOYEE_ID : '');
+            const method = IS_EDITING ? 'PUT' : 'POST';
+
+            $.ajax({
+                url: apiUrl,
+                method: method,
+                contentType: 'application/json',
+                data: JSON.stringify(employeeData),
+                headers: {
+                    'Authorization': 'Bearer ' + JWT_TOKEN
+                },
+                success: function(response) {
+                    $('#message').html('<div class="alert alert-success">Employee saved successfully! Redirecting...</div>');
+
+                    // Redirect back to the list after a short delay
+                    setTimeout(function() {
+                        location.href = '@Url.Action("Index", "Employee")';
+                    }, 1500);
+                },
+                error: function(xhr) {
+                    let errorMessage = `API Error: ${xhr.status} ${xhr.statusText}`;
+                    try {
+                        const errorJson = JSON.parse(xhr.responseText);
+                        // Check for model state validation errors from the API
+                        if (errorJson.errors) {
+                            errorMessage = Object.values(errorJson.errors).flat().join('<br>');
+                        } else if (errorJson.message) {
+                             errorMessage = errorJson.message;
+                        }
+                    } catch (e) {
+                        // Ignore parsing errors, use generic message
+                    }
+
+                    $('#message').html(`<div class="alert alert-danger">Failed to save employee:<br>${errorMessage}</div>`);
+                    console.error("Form submission error:", xhr);
+                }
+            });
+        }
+    </script>
+}

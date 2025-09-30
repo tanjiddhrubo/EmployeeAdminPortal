@@ -1,0 +1,83 @@
+﻿@using EmployeeAdminClient.Models
+@{
+    ViewData["Title"] = "External Product List";
+}
+
+<div class="container mt-4">
+    <h1>External Product List</h1>
+    <p>Data fetched from the external API: <code>@ViewBag.ExternalApiUrl</code></p>
+
+    <table class="table table-bordered table-striped" id="productTable">
+        <thead>
+            <tr>
+                <th>Code</th>
+                <th>Name</th>
+                <th>Unit</th>
+                <th>Purchase Price</th>
+                <th>Sales Price</th>
+            </tr>
+        </thead>
+        <tbody>
+        </tbody>
+    </table>
+
+    <div id="loadingMessage" class="text-center">
+        <i class="fas fa-spinner fa-spin"></i> Loading external product data...
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        // Get the external API URL from the ViewBag
+        const EXTERNAL_API_URL = '@ViewBag.ExternalApiUrl';
+
+        // ⭐️ CORE AJAX FUNCTION: Fetch external product list ⭐️
+        function loadProducts() {
+            $('#loadingMessage').show();
+
+            $.ajax({
+                url: EXTERNAL_API_URL,
+                method: 'GET',
+                // Note: No 'Authorization' header is needed for this public external API
+                success: function(products) {
+                    $('#loadingMessage').hide();
+                    const $tbody = $('#productTable tbody');
+                    $tbody.empty(); // Clear existing rows
+
+                    if (!products || products.length === 0) {
+                        $tbody.append('<tr><td colspan="5" class="text-center">No products found in the external API.</td></tr>');
+                        return;
+                    }
+
+                    $.each(products, function(index, product) {
+                        const row = `
+                            <tr>
+                                <td>${product.Code}</td>
+                                <td>${product.Name}</td>
+                                <td>${product.UnitName}</td>
+                                <td>$${(product.PurchasePrice || 0).toFixed(2)}</td>
+                                <td>$${(product.SalesPrice || 0).toFixed(2)}</td>
+                            </tr>
+                        `;
+                        $tbody.append(row);
+                    });
+                },
+                error: function(xhr, status, error) {
+                    $('#loadingMessage').hide();
+                    console.error("Error loading external products:", error);
+                    $('#productTable tbody').html(`
+                        <tr>
+                            <td colspan="5" class="text-danger text-center">
+                                Failed to fetch external product data. Error: ${xhr.status} ${xhr.statusText}
+                            </td>
+                        </tr>
+                    `);
+                }
+            });
+        }
+
+        $(document).ready(function() {
+            loadProducts();
+        });
+    </script>
+}

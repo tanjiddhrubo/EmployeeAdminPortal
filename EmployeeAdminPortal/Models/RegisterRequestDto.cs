@@ -1,4 +1,4 @@
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 
 namespace EmployeeAdminPortal.Models.DTOs
 {
@@ -6,10 +6,17 @@ namespace EmployeeAdminPortal.Models.DTOs
     {
         [Required]
         [DataType(DataType.EmailAddress)]
-        public string Username { get; set; } = string.Empty;
+        // FIX: Removed = string.Empty; and added 'required'
+        public required string Username { get; set; }
+
+        [Required]
+        [EmailAddress]
+        // FIX: Removed = string.Empty; and added 'required'
+        public required string Email { get; set; }
 
         [Required]
         [DataType(DataType.Password)]
-        public string Password { get; set; } = string.Empty;
+        // FIX: Removed = string.Empty; and added 'required'
+        public required string Password { get; set; }
     }
 }
