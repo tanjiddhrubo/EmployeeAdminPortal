@@ -1,0 +1,33 @@
+{
+  "info": {
+    "name": "Employee Admin API",
+    "_postman_id": "",
+    "description": "Basic requests for the API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Register",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"testuser@test.com\",\n  \"email\": \"testuser@test.com\",\n  \"password\": \"P@ssword123!\"\n}"
+        },
+        "url": { "raw": "https://localhost:7115/api/auth/register", "host": ["https://localhost:7115"], "path": ["api","auth","register"] }
+      }
+    },
+    {
+      "name": "Login",
+      "request": {
+        "method": "POST",
+        "header": [ { "key": "Content-Type", "value": "application/json" } ],
+        "body": { "mode": "raw", "raw": "{\n  \"username\": \"testuser@test.com\",\n  \"password\": \"P@ssword123!\"\n}" },
+        "url": { "raw": "https://localhost:7115/api/auth/login", "host": ["https://localhost:7115"], "path": ["api","auth","login"] }
+      }
+    }
+  ]
+}

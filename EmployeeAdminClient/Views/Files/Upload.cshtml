@@ -1,0 +1,46 @@
+@{
+    ViewData["Title"] = "Upload File";
+}
+
+<h1>Upload File</h1>
+<form id="uploadForm" enctype="multipart/form-data">
+    <div class="mb-3">
+        <input type="file" id="fileInput" name="file" />
+    </div>
+    <button type="submit" class="btn btn-primary">Upload</button>
+</form>
+
+<div id="result" class="mt-3"></div>
+
+@section Scripts {
+<script>
+    const API_BASE_URL = '@ViewBag.ApiBaseUrl';
+    const JWT_TOKEN = "@Context.Session.GetString("JwtToken")";
+
+    $(function() {
+        $('#uploadForm').on('submit', function(e) {
+            e.preventDefault();
+            const fileInput = document.getElementById('fileInput');
+            if (!fileInput.files.length) return alert('Select a file');
+
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+
+            $.ajax({
+                url: API_BASE_URL + '/api/files/upload',
+                method: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                headers: { 'Authorization': 'Bearer ' + JWT_TOKEN },
+                success: function(res) {
+                    $('#result').html(`<div class="alert alert-success">Uploaded: ${res.original} (saved: ${res.fileName})</div>`);
+                },
+                error: function(xhr) {
+                    $('#result').html('<div class="alert alert-danger">Upload failed: ' + xhr.status + '</div>');
+                }
+            });
+        });
+    });
+</script>
+}

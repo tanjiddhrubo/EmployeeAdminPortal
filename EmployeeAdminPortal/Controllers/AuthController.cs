@@ -1,12 +1,13 @@
 ﻿// File: Controllers/AuthController.cs
 
+using Microsoft.AspNetCore.Mvc;
 using EmployeeAdminPortal.Models.DTOs;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
+using Microsoft.IdentityModel.Tokens;
 using System.Security.Claims;
 using System.Text;
+using Microsoft.Extensions.Hosting;
 
 namespace EmployeeAdminPortal.Controllers
 {
@@ -15,108 +16,132 @@ namespace EmployeeAdminPortal.Controllers
     public class AuthController : ControllerBase
     {
         private readonly UserManager<IdentityUser> _userManager;
+        private readonly RoleManager<IdentityRole> _roleManager;
         private readonly IConfiguration _configuration;
+        private readonly ILogger<AuthController> _logger;
+        private readonly IWebHostEnvironment _env;
 
-        public AuthController(UserManager<IdentityUser> userManager, IConfiguration configuration)
+        public AuthController(
+            UserManager<IdentityUser> userManager,
+            RoleManager<IdentityRole> roleManager,
+            IConfiguration configuration,
+            ILogger<AuthController> logger,
+            IWebHostEnvironment env)
         {
             _userManager = userManager;
+            _roleManager = roleManager;
             _configuration = configuration;
+            _logger = logger;
+            _env = env;
         }
 
-        // POST: /api/auth/register
-        [HttpPost]
-        [Route("register")]
-        public async Task<IActionResult> Register([FromBody] RegisterRequestDto registerRequestDto)
+        [HttpPost("register")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        public async Task<IActionResult> Register([FromBody] RegisterRequestDto request)
         {
-            var identityUser = new IdentityUser
+            try
             {
-                UserName = registerRequestDto.Username,
-                Email = registerRequestDto.Email // Use the correct DTO property for Email
-            };
+                if (!ModelState.IsValid)
+                {
+                    var errors = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage);
+                    return BadRequest(new { message = "Validation failed", errors });
+                }
 
-            var identityResult = await _userManager.CreateAsync(identityUser, registerRequestDto.Password);
+                var existingUser = await _userManager.FindByNameAsync(request.Username)
+                               ?? await _userManager.FindByEmailAsync(request.Email);
 
-            if (identityResult.Succeeded)
-            {
-                // Assign "User" role to every registered user
-                await _userManager.AddToRoleAsync(identityUser, "User");
+                if (existingUser != null)
+                {
+                    return BadRequest(new { message = "User already exists!" });
+                }
 
-                return Ok("User registered successfully! You can now log in.");
+                var user = new IdentityUser
+                {
+                    UserName = request.Username,
+                    Email = request.Email,
+                    SecurityStamp = Guid.NewGuid().ToString()
+                };
+
+                var result = await _userManager.CreateAsync(user, request.Password);
+
+                if (result.Succeeded)
+                {
+                    if (await _roleManager.RoleExistsAsync("User"))
+                    {
+                        await _userManager.AddToRoleAsync(user, "User");
+                    }
+
+                    return Ok(new { message = "User registered successfully!" });
+                }
+
+                var errorMessages = result.Errors.Select(e => e.Description);
+                _logger.LogWarning("User registration failed: {Errors}", string.Join(';', errorMessages));
+                return BadRequest(new { message = "Registration failed", errors = errorMessages });
             }
-
-            return BadRequest(identityResult.Errors);
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error during registration");
+                if (_env.IsDevelopment())
+                {
+                    return StatusCode(500, new { message = "An error occurred during registration.", detail = ex.Message });
+                }
+                return StatusCode(500, new { message = "An error occurred during registration." });
+            }
         }
 
-        // POST: /api/auth/login
-        [HttpPost]
-        [Route("login")]
-        public async Task<IActionResult> Login([FromBody] LoginRequestDto loginRequestDto)
+        [HttpPost("login")]
+        public async Task<IActionResult> Login([FromBody] LoginRequestDto request)
         {
-            // ⭐️ FIX: Check if the input is an email, and try to find the user by email first,
-            // otherwise, fall back to finding by username.
-            IdentityUser? user;
-            if (loginRequestDto.Username.Contains("@"))
+            try
             {
-                user = await _userManager.FindByEmailAsync(loginRequestDto.Username);
+                var user = await _userManager.FindByNameAsync(request.Username)
+                          ?? await _userManager.FindByEmailAsync(request.Username);
+
+                if (user == null || !await _userManager.CheckPasswordAsync(user, request.Password))
+                {
+                    return Unauthorized(new { message = "Invalid username or password" });
+                }
+
+                var userRoles = await _userManager.GetRolesAsync(user);
+                var token = GenerateJwtToken(user, userRoles);
+
+                return Ok(new { token = token });
             }
-            else
+            catch (Exception ex)
             {
-                user = await _userManager.FindByNameAsync(loginRequestDto.Username);
+                _logger.LogError(ex, "Error during login");
+                if (_env.IsDevelopment())
+                {
+                    return StatusCode(500, new { message = "An error occurred during login.", detail = ex.Message });
+                }
+                return StatusCode(500, new { message = "An error occurred during login." });
             }
-
-            // If user is null after checking both, return Unauthorized
-            if (user == null)
-            {
-                return Unauthorized("Login failed. Invalid credentials.");
-            }
-
-            // Check the password
-            if (await _userManager.CheckPasswordAsync(user, loginRequestDto.Password))
-            {
-                var token = await GenerateJwtToken(user);
-
-                return Ok(new { Token = token });
-            }
-
-            return Unauthorized("Login failed. Invalid credentials.");
         }
 
-        private async Task<string> GenerateJwtToken(IdentityUser user)
+        private string GenerateJwtToken(IdentityUser user, IList<string> roles)
         {
-            var key = _configuration["Jwt:Key"] ?? throw new InvalidOperationException("JWT Key not found.");
-            var issuer = _configuration["Jwt:Issuer"] ?? throw new InvalidOperationException("JWT Issuer not found.");
-            var audience = _configuration["Jwt:Audience"] ?? throw new InvalidOperationException("JWT Audience not found."); // ⭐️ ADDED: Audience check
-
             var claims = new List<Claim>
             {
-                new Claim(ClaimTypes.Name, user.UserName ?? user.Id),
-                new Claim(ClaimTypes.Email, user.Email ?? user.Id),
+                new Claim(ClaimTypes.Name, user.UserName),
+                new Claim(ClaimTypes.Email, user.Email),
                 new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
             };
 
-            // Add roles to claims
-            var roles = await _userManager.GetRolesAsync(user);
-            foreach (var role in roles)
-            {
-                claims.Add(new Claim(ClaimTypes.Role, role));
-            }
+            claims.AddRange(roles.Select(role => new Claim(ClaimTypes.Role, role)));
 
-            var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key));
-            var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
+            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(
+                _configuration["Jwt:Key"] ?? throw new InvalidOperationException("JWT Key not found")));
 
-            var tokenDescriptor = new SecurityTokenDescriptor
-            {
-                Subject = new ClaimsIdentity(claims),
-                Issuer = issuer,
-                Audience = audience, // ⭐️ ADDED: Set the Audience
-                Expires = DateTime.Now.AddDays(7), // Token expiration time
-                SigningCredentials = credentials
-            };
+            var token = new JwtSecurityToken(
+                issuer: _configuration["Jwt:Issuer"],
+                audience: _configuration["Jwt:Audience"],
+                claims: claims,
+                expires: DateTime.Now.AddHours(3),
+                signingCredentials: new SigningCredentials(key, SecurityAlgorithms.HmacSha256)
+            );
 
-            var tokenHandler = new JwtSecurityTokenHandler();
-            var token = tokenHandler.CreateToken(tokenDescriptor);
-
-            return tokenHandler.WriteToken(token);
+            return new JwtSecurityTokenHandler().WriteToken(token);
         }
     }
 }

@@ -2,49 +2,71 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using System;
+using System.Linq;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
-builder.Services.AddControllersWithViews();
+builder.Services.AddControllersWithViews()
+    .ConfigureApplicationPartManager(apm =>
+    {
+        // Remove any ApplicationPart that comes from the API project assembly to avoid registering API controllers in the client app
+        var partsToRemove = apm.ApplicationParts
+            .Where(p => p.Name != null && p.Name.Contains("EmployeeAdminPortal", StringComparison.OrdinalIgnoreCase))
+            .ToList();
 
-// ?? ADDED: Configure session services ??
+        foreach (var p in partsToRemove)
+        {
+            apm.ApplicationParts.Remove(p);
+        }
+    });
+
+// Add distributed cache required for session
+builder.Services.AddDistributedMemoryCache();
+
+// Configure session
 builder.Services.AddSession(options =>
 {
-    // Set a timeout for the session token
     options.IdleTimeout = TimeSpan.FromMinutes(30);
-    // Prevents client-side script access to the session cookie
     options.Cookie.HttpOnly = true;
-    // Makes the session cookie essential for the app to function
     options.Cookie.IsEssential = true;
 });
+
+// Configure HttpClient
+builder.Services.AddHttpClient();
 
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
-if (!app.Environment.IsDevelopment())
+if (app.Environment.IsDevelopment())
+{
+    app.UseDeveloperExceptionPage();
+}
+else
 {
     app.UseExceptionHandler("/Home/Error");
-    // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
     app.UseHsts();
 }
 
 app.UseHttpsRedirection();
 app.UseStaticFiles();
 
-// ?? ADDED: Use session middleware ??
-app.UseSession();
-
 app.UseRouting();
 
-// NOTE: We don't need app.UseAuthentication() here, as this is a client app,
-// but we keep app.UseAuthorization() for MVC controller-level authorization attributes.
+app.UseSession();
 
+app.UseAuthentication();
 app.UseAuthorization();
+
+// Explicit root redirect to the client login page to avoid accidental API routing
+app.MapGet("/", context =>
+{
+    context.Response.Redirect("/Auth/Login");
+    return Task.CompletedTask;
+});
 
 app.MapControllerRoute(
     name: "default",
-    // ?? CHANGE THE DEFAULT STARTING ROUTE ??
     pattern: "{controller=Auth}/{action=Login}/{id?}");
 
 app.Run();

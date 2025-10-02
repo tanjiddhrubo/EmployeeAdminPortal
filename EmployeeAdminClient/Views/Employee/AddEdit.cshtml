@@ -117,8 +117,6 @@
                         // After populating, if in edit mode, re-set the values
                         if (IS_EDITING && EMPLOYEE_ID) {
                             // This ensures the dropdown values are correctly selected after they've been loaded
-                            // This relies on loadEmployeeData having been called or calling it now
-                            // For simplicity, we keep the original flow and trust loadEmployeeData is called
                         }
 
                     },
@@ -147,7 +145,7 @@
                 success: function(data) {
                     const employeeData = (typeof data === 'string') ? JSON.parse(data) : data;
 
-                    $('#FullName').val(employeeData.fullName);
+                    $('#FullName').val(employeeData.name);
                     $('#Email').val(employeeData.email);
                     $('#Phone').val(employeeData.phone);
                     $('#Salary').val(employeeData.salary);
@@ -178,13 +176,12 @@
             }
 
             const employeeData = {
-                id: IS_EDITING ? EMPLOYEE_ID : null,
-                fullName: $('#FullName').val(),
-                email: $('#Email').val(),
-                phone: $('#Phone').val(),
-                salary: parseFloat($('#Salary').val()),
-                departmentId: $('#DepartmentId').val(),
-                designationId: $('#DesignationId').val()
+                Name: $('#FullName').val(),
+                Email: $('#Email').val(),
+                Phone: $('#Phone').val(),
+                Salary: parseFloat($('#Salary').val()),
+                DepartmentId: $('#DepartmentId').val(),
+                DesignationId: $('#DesignationId').val()
             };
 
             const apiUrl = API_BASE_URL + '/api/employees' + (IS_EDITING ? '/' + EMPLOYEE_ID : '');
@@ -226,4 +223,4 @@
             });
         }
     </script>
-}
+}}

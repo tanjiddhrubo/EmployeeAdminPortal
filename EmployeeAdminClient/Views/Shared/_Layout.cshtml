@@ -4,7 +4,7 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>@ViewData["Title"] - EmployeePortal</title>
+    <title>@ViewData["Title"] - Employee Admin Portal</title>
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/EmployeeAdminClient.styles.css" asp-append-version="true" />
@@ -12,39 +12,47 @@
 <body>
     <header>
         <nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-light bg-white border-bottom box-shadow mb-3">
-            <div class="container-fluid">
-                <a class="navbar-brand" asp-area="" asp-controller="Home" asp-action="Index">Employee Portal</a>
+            <div class="container">
+                <a class="navbar-brand" asp-controller="Home" asp-action="Index">Employee Admin</a>
                 <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse" aria-controls="navbarSupportedContent"
                         aria-expanded="false" aria-label="Toggle navigation">
                     <span class="navbar-toggler-icon"></span>
                 </button>
                 <div class="navbar-collapse collapse d-sm-inline-flex justify-content-between">
                     <ul class="navbar-nav flex-grow-1">
-
-                        @{
-                            // ⭐️ CRITICAL: Check if the JWT Token exists in the session ⭐️
-                            bool isLoggedIn = !string.IsNullOrEmpty(Context.Session.GetString("JwtToken"));
-                        }
-
-                        @if (isLoggedIn)
+                        @if (Context.Session.GetString("JwtToken") != null)
                         {
                             <li class="nav-item">
-                                <a class="nav-link text-dark" asp-area="" asp-controller="Employee" asp-action="Index">Employee Admin</a>
+                                <a class="nav-link text-dark" asp-controller="Employee" asp-action="Index">Employees</a>
                             </li>
                             <li class="nav-item">
-                                <a class="nav-link text-dark" asp-area="" asp-controller="Product" asp-action="Index">Product Data</a>
+                                <a class="nav-link text-dark" asp-controller="Department" asp-action="Index">Departments</a>
                             </li>
                             <li class="nav-item">
-                                <a class="nav-link text-danger" asp-area="" asp-controller="Auth" asp-action="Logout">Logout</a>
+                                <a class="nav-link text-dark" asp-controller="Designation" asp-action="Index">Designations</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link text-dark" asp-controller="Products" asp-action="Index">Products</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link text-dark" asp-controller="Files" asp-action="Manage">Files</a>
+                            </li>
+                        }
+                    </ul>
+                    <ul class="navbar-nav">
+                        @if (Context.Session.GetString("JwtToken") == null)
+                        {
+                            <li class="nav-item">
+                                <a class="nav-link text-dark" asp-controller="Auth" asp-action="Login">Login</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link text-dark" asp-controller="Auth" asp-action="Register">Register</a>
                             </li>
                         }
                         else
                         {
                             <li class="nav-item">
-                                <a class="nav-link text-dark" asp-area="" asp-controller="Auth" asp-action="Login">Login</a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link text-dark" asp-area="" asp-controller="Auth" asp-action="Register">Register</a>
+                                <a class="nav-link text-dark" asp-controller="Auth" asp-action="Logout">Logout</a>
                             </li>
                         }
                     </ul>
@@ -60,9 +68,10 @@
 
     <footer class="border-top footer text-muted">
         <div class="container">
-            &copy; 2025 - EmployeeAdminClient - <a asp-area="" asp-controller="Home" asp-action="Privacy">Privacy</a>
+            &copy; @DateTime.Now.Year - Employee Admin Portal
         </div>
     </footer>
+
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
     <script src="~/js/site.js" asp-append-version="true"></script>

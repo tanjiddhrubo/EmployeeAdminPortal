@@ -6,135 +6,121 @@ using System.Net.Http.Headers;
 
 namespace EmployeeAdminClient.Controllers
 {
+    [Route("[controller]")]
     public class AuthController : Controller
     {
         private readonly HttpClient _httpClient;
         private readonly string _apiBaseUrl;
+        private readonly ILogger<AuthController> _logger;
 
         // Constructor uses IConfiguration to read the API Base URL from appsettings.json
-        public AuthController(IConfiguration configuration)
+        public AuthController(IConfiguration configuration, ILogger<AuthController> logger)
         {
             _httpClient = new HttpClient();
-            _apiBaseUrl = configuration.GetValue<string>("ApiSettings:BaseUrl")
-                          ?? throw new InvalidOperationException("ApiSettings:BaseUrl not configured.");
+            _logger = logger;
+
+            var configured = configuration.GetValue<string>("ApiSettings:BaseUrl");
+            if (string.IsNullOrWhiteSpace(configured))
+            {
+                // fallback to expected default API url
+                configured = "https://localhost:7115";
+                _logger.LogWarning("ApiSettings:BaseUrl not configured; falling back to {Url}", configured);
+            }
+
+            _apiBaseUrl = configured.TrimEnd('/');
         }
 
         // -------------------------------------------------------------------
         // LOGIN ACTIONS
         // -------------------------------------------------------------------
 
-        [HttpGet]
+        [HttpGet("Login")]
         public IActionResult Login()
         {
+            _logger.LogDebug("GET {Path} invoked", HttpContext.Request.Path);
             // Clear any existing token on the way to the login page
             HttpContext.Session.Remove("JwtToken");
             return View();
         }
 
-        [HttpPost]
+        [HttpPost("Login")]
+        [ValidateAntiForgeryToken]
         public async Task<IActionResult> Login(LoginViewModel model)
         {
+            _logger.LogDebug("POST {Path} invoked", HttpContext.Request.Path);
+
             if (!ModelState.IsValid)
             {
                 return View(model);
             }
 
-            // List of potential login endpoints to try
-            var endpointsToTry = new List<string>
-            {
-                "/api/auth/login",
-                "/api/Account/Login"
-            };
-
-            // NEW: Define the different key names the API might accept for the identifier
-            var identifierKeysToTry = new List<string> { "username", "email" };
+            // Use a single well-known endpoint to avoid ambiguity
+            var endpoint = "/api/auth/login";
 
             string? jwtToken = null;
-            HttpResponseMessage? finalResponse = null;
+            HttpResponseMessage? response = null;
 
-            // Loop through identifier keys (username then email)
-            foreach (var key in identifierKeysToTry)
+            try
             {
-                // Prepare the JSON payload dynamically based on the current key
-                var loginRequestData = new Dictionary<string, string>
+                var loginRequest = new Dictionary<string, string>
                 {
-                    { key, model.Username },
+                    { "username", model.Username },
                     { "password", model.Password }
                 };
-                var loginRequestJson = JsonSerializer.Serialize(loginRequestData);
 
-                // Loop through API endpoints
-                foreach (var endpoint in endpointsToTry)
+                var loginRequestJson = JsonSerializer.Serialize(loginRequest);
+                var content = new StringContent(loginRequestJson, Encoding.UTF8, "application/json");
+
+                var requestUrl = _apiBaseUrl + endpoint;
+                _logger.LogInformation("Attempting login POST to {Url} for user {User}", requestUrl, model.Username);
+
+                response = await _httpClient.PostAsync(requestUrl, content);
+
+                var responseContent = await response.Content.ReadAsStringAsync();
+                _logger.LogDebug("Login response ({Status}): {Body}", response.StatusCode, responseContent);
+
+                if (response.IsSuccessStatusCode)
                 {
-                    try
+                    var tokenData = JsonSerializer.Deserialize<Dictionary<string, string>>(responseContent);
+                    if (tokenData != null && tokenData.TryGetValue("token", out jwtToken))
                     {
-                        var content = new StringContent(loginRequestJson, Encoding.UTF8, "application/json");
-                        var response = await _httpClient.PostAsync($"{_apiBaseUrl}{endpoint}", content);
-
-                        if (response.IsSuccessStatusCode)
-                        {
-                            var responseContent = await response.Content.ReadAsStringAsync();
-                            var tokenData = JsonSerializer.Deserialize<Dictionary<string, string>>(responseContent);
-
-                            if (tokenData != null && tokenData.TryGetValue("token", out jwtToken))
-                            {
-                                // Success! Store the response and use goto to break all nested loops.
-                                finalResponse = response;
-                                goto SuccessFlow;
-                            }
-                        }
-
-                        // Capture the response for error reporting if all attempts fail
-                        finalResponse = response;
-
-                        // If we failed but not with a 400 Bad Request, break the inner endpoint loop 
-                        // and try the next key (username/email).
-                        if (response.StatusCode != System.Net.HttpStatusCode.BadRequest)
-                        {
-                            break;
-                        }
+                        HttpContext.Session.SetString("JwtToken", jwtToken);
+                        // Redirect to Add Employee page in the CLIENT after login
+                        return RedirectToAction("AddEdit", "Employee");
                     }
-                    catch (Exception ex)
-                    {
-                        ModelState.AddModelError(string.Empty, $"Critical error trying API login: {ex.Message}");
-                        return View(model);
-                    }
+
+                    // If no token present, treat as failure
+                    ModelState.AddModelError(string.Empty, "Login succeeded but no token was returned by the API.");
+                    return View(model);
                 }
-            }
 
-        SuccessFlow: // Label for success jump
-
-            // If we have a token, authentication was successful
-            if (!string.IsNullOrEmpty(jwtToken))
-            {
-                HttpContext.Session.SetString("JwtToken", jwtToken);
-                return RedirectToAction("Index", "Employee");
-            }
-
-            // If we reach here, login failed with all attempts. Report the error.
-            if (finalResponse != null)
-            {
-                var responseContent = await finalResponse.Content.ReadAsStringAsync();
+                // Non-success status: try to present API message
                 try
                 {
-                    var errorResponse = JsonSerializer.Deserialize<Dictionary<string, string>>(responseContent);
-                    if (errorResponse != null && errorResponse.TryGetValue("message", out var errorMessage))
+                    var err = JsonSerializer.Deserialize<Dictionary<string, object>>(responseContent);
+                    if (err != null && err.TryGetValue("message", out var msg))
                     {
-                        ModelState.AddModelError(string.Empty, errorMessage);
+                        ModelState.AddModelError(string.Empty, msg?.ToString() ?? "Login failed.");
                     }
                     else
                     {
-                        ModelState.AddModelError(string.Empty, $"Login failed: {finalResponse.StatusCode}. Check credentials/API configuration.");
+                        ModelState.AddModelError(string.Empty, $"Login failed: {response.StatusCode}");
                     }
                 }
                 catch
                 {
-                    ModelState.AddModelError(string.Empty, "Invalid login attempt or unhandled API error. (Check credentials and API URL)");
+                    ModelState.AddModelError(string.Empty, $"Login failed: {response.StatusCode}");
                 }
             }
-            else
+            catch (HttpRequestException ex)
             {
-                ModelState.AddModelError(string.Empty, "Failed to connect to the API base URL.");
+                _logger.LogError(ex, "HTTP error when calling login endpoint {Url}", _apiBaseUrl + endpoint);
+                ModelState.AddModelError(string.Empty, "Could not reach authentication service. Check API is running and ApiSettings:BaseUrl is correct.");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Unexpected error during login");
+                ModelState.AddModelError(string.Empty, "An unexpected error occurred during login.");
             }
 
             return View(model);
@@ -144,9 +130,10 @@ namespace EmployeeAdminClient.Controllers
         // LOGOUT ACTION
         // -------------------------------------------------------------------
 
-        [HttpGet]
+        [HttpGet("Logout")]
         public IActionResult Logout()
         {
+            _logger.LogDebug("GET {Path} invoked", HttpContext.Request.Path);
             // Clear the session token and redirect back to login
             HttpContext.Session.Remove("JwtToken");
             return RedirectToAction("Login");
@@ -156,17 +143,18 @@ namespace EmployeeAdminClient.Controllers
         // REGISTER ACTIONS
         // -------------------------------------------------------------------
 
-        [HttpGet]
+        [HttpGet("Register")]
         public IActionResult Register()
         {
+            _logger.LogDebug("GET {Path} invoked", HttpContext.Request.Path);
             return View();
         }
 
-        [HttpPost]
+        [HttpPost("Register")]
+        [ValidateAntiForgeryToken]
         public async Task<IActionResult> Register(RegisterViewModel model)
         {
-            // IMPORTANT: Set the default role to prevent client-side tampering
-            model.Roles = new List<string> { "User" };
+            _logger.LogDebug("POST {Path} invoked", HttpContext.Request.Path);
 
             if (!ModelState.IsValid)
             {
@@ -175,52 +163,61 @@ namespace EmployeeAdminClient.Controllers
 
             try
             {
-                // Prepare the JSON payload for the API
+                // Update: Match the API's RegisterRequestDto format exactly
                 var registerRequest = new
                 {
                     username = model.Username,
                     email = model.Email,
-                    password = model.Password,
-                    roles = model.Roles // Hardcoded to ["User"]
+                    password = model.Password
                 };
 
                 var registerRequestJson = JsonSerializer.Serialize(registerRequest);
                 var content = new StringContent(registerRequestJson, Encoding.UTF8, "application/json");
 
-                // Use the correct API endpoint: /api/Auth/register
-                var response = await _httpClient.PostAsync($"{_apiBaseUrl}/api/Auth/register", content);
+                var requestUrl = _apiBaseUrl + "/api/Auth/register";
+                _logger.LogInformation("Sending registration POST to {Url} for user {User}", requestUrl, model.Username);
 
+                var response = await _httpClient.PostAsync(requestUrl, content);
                 var responseContent = await response.Content.ReadAsStringAsync();
 
                 if (response.IsSuccessStatusCode)
                 {
-                    // Store a success message to display on the login page
                     TempData["SuccessMessage"] = $"Registration successful for {model.Email}. Please log in now.";
                     return RedirectToAction("Login");
                 }
 
-                // Handle registration failure
                 ModelState.AddModelError(string.Empty, $"Registration failed. API Status: {response.StatusCode}");
 
                 try
                 {
-                    var errorResponse = JsonSerializer.Deserialize<Dictionary<string, string>>(responseContent);
-                    if (errorResponse != null && errorResponse.TryGetValue("message", out var errorMessage))
+                    var errorResponse = JsonSerializer.Deserialize<Dictionary<string, object>>(responseContent);
+                    if (errorResponse != null)
                     {
-                        ModelState.AddModelError(string.Empty, errorMessage);
-                    }
-                    else if (errorResponse != null && errorResponse.ContainsKey("errors"))
-                    {
-                        ModelState.AddModelError(string.Empty, "Registration failed due to validation issues. Check password complexity/email uniqueness.");
+                        if (errorResponse.TryGetValue("errors", out var errors))
+                        {
+                            var errorList = JsonSerializer.Deserialize<Dictionary<string, string[]>>(errors.ToString() ?? "{}");
+                            if (errorList != null)
+                            {
+                                foreach (var error in errorList.SelectMany(e => e.Value))
+                                {
+                                    ModelState.AddModelError(string.Empty, error);
+                                }
+                            }
+                        }
+                        else if (errorResponse.TryGetValue("message", out var message))
+                        {
+                            ModelState.AddModelError(string.Empty, message?.ToString() ?? "Unknown error");
+                        }
                     }
                 }
                 catch
                 {
-                    // Fallback for non-JSON responses
+                    ModelState.AddModelError(string.Empty, responseContent);
                 }
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "Error during registration");
                 ModelState.AddModelError(string.Empty, $"An error occurred: {ex.Message}");
             }
 

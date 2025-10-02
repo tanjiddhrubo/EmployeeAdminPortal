@@ -7,13 +7,11 @@ namespace EmployeeAdminPortal.Models.DTOs
     public class LoginRequestDto
     {
         [Required]
-        [DataType(DataType.EmailAddress)]
-        // FIX: Removed = string.Empty; and added 'required'
-        public required string Username { get; set; }
+          [DataType(DataType.EmailAddress)]
+        public required string Username { get; set; } // Correct
 
         [Required]
         [DataType(DataType.Password)]
-        // FIX: Removed = string.Empty; and added 'required'
-        public required string Password { get; set; }
+        public required string Password { get; set; } // Correct
     }
 }

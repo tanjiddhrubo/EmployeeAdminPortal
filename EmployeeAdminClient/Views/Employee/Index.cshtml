@@ -12,6 +12,8 @@
         </button>
     </div>
 
+    <div id="loadError" class="mb-2 text-danger"></div>
+
     <table class="table table-bordered table-striped" id="employeeTable">
         <thead>
             <tr>
@@ -36,118 +38,89 @@
         const API_BASE_URL = '@ViewBag.ApiBaseUrl';
 
         // Retrieve the JWT token from the session using Razor
-        // This is correct: it pulls the token saved by the client's AuthController
         const JWT_TOKEN = "@Context.Session.GetString("JwtToken")";
 
+        if (!JWT_TOKEN) {
+            // No token -> go to login (logout clears any stale session)
+            location.href = '@Url.Action("Logout", "Auth")';
+        }
 
         // ⭐️ CORE AJAX FUNCTION: Fetch all employees ⭐️
         function loadEmployees() {
             const $tbody = $('#employeeTable tbody');
             $tbody.html('<tr><td colspan="7" class="text-center">Loading employees...</td></tr>'); // Loading message
+            $('#loadError').empty();
 
             $.ajax({
-                // CRITICAL FIX: Ensure the route is plural to match EmployeesController.cs
                 url: API_BASE_URL + '/api/employees',
                 method: 'GET',
                 contentType: 'application/json',
-
-                // CRITICAL: Attach the Authorization header
                 headers: {
                     'Authorization': 'Bearer ' + JWT_TOKEN
                 },
-
                 success: function(employees) {
                     $tbody.empty(); // Clear loading message
 
-                    if (employees.length === 0) {
+                    if (!employees || employees.length === 0) {
                         $tbody.append('<tr><td colspan="7" class="text-center">No employees found.</td></tr>');
                         return;
                     }
 
-                    // The employees variable likely contains a JSON string from the API proxy,
-                    // so we need to parse it if it wasn't automatically done by jQuery
                     const employeeData = (typeof employees === 'string') ? JSON.parse(employees) : employees;
 
                     $.each(employeeData, function(index, employee) {
-                        // NOTE: Ensure property names match your API Employee DTO (fullName, departmentName, etc.)
                         const row = `
                             <tr data-id="${employee.id}">
-                                <td>${employee.fullName}</td>
+                                <td>${employee.name}</td>
                                 <td>${employee.email}</td>
-                                <td>${employee.phone}</td>
-                                <td>$${employee.salary.toFixed(2)}</td>
-                                <td>${employee.departmentName || 'N/A'}</td>
-                                <td>${employee.designationName || 'N/A'}</td>
+                                <td>${employee.phone ?? ''}</td>
+                                <td>${employee.salary}</td>
+                                <td>${employee.departmentName ?? ''}</td>
+                                <td>${employee.designationName ?? ''}</td>
                                 <td>
-                                    <button class="btn btn-sm btn-info edit-btn" data-id="${employee.id}">
-                                        <i class="fas fa-edit"></i> Edit
-                                    </button>
-                                    <button class="btn btn-sm btn-danger delete-btn" data-id="${employee.id}" data-name="${employee.fullName}">
-                                        <i class="fas fa-trash"></i> Delete
-                                    </button>
+                                    <button class="btn btn-sm btn-primary me-1" onclick="location.href='@Url.Action("AddEdit","Employee")?id=${employee.id}'">Edit</button>
+                                    <button class="btn btn-sm btn-danger" onclick="deleteEmployee('${employee.id}')">Delete</button>
                                 </td>
-                            </tr>
-                        `;
+                            </tr>`;
                         $tbody.append(row);
                     });
                 },
                 error: function(xhr) {
-                    console.error("Error loading employees:", xhr);
+                    console.error('Failed to load employees', xhr);
+                    let extra = '';
+                    try {
+                        if (xhr.responseText) {
+                            console.error('Response body:', xhr.responseText);
+                            const body = JSON.parse(xhr.responseText);
+                            extra = body.message || JSON.stringify(body);
+                        }
+                    } catch (e) {
+                        console.error('Could not parse response body', e);
+                    }
 
-                    // Show the specific status to the user for better debugging
-                    alert("Failed to load employee data. API Status: " + xhr.status);
+                    $('#loadError').text('Error loading data. See console. ' + (extra ? ('Details: ' + extra) : ''));
+                    $tbody.html('<tr><td colspan="7" class="text-center">Error loading data. See console.</td></tr>');
 
-                    // If 401 Unauthorized, redirect to login/logout
-                    if (xhr.status === 401) {
-                        location.href = '@Url.Action("Logout", "Auth")';
-                    } else {
-                        $tbody.html('<tr><td colspan="7" class="text-danger text-center">Error loading data. See console.</td></tr>');
+                    // If 401 or 403 redirect to login
+                    if (xhr.status === 401 || xhr.status === 403) {
+                        setTimeout(function() { location.href = '@Url.Action("Logout", "Auth")'; }, 800);
                     }
                 }
             });
         }
 
-        // ⭐️ DELETE AJAX FUNCTION ⭐️
-        $(document).on('click', '.delete-btn', function() {
-            const employeeId = $(this).data('id');
-            const employeeName = $(this).data('name');
+        function deleteEmployee(id) {
+            if (!confirm('Delete this employee?')) return;
 
-            if (confirm(`Are you sure you want to delete employee: ${employeeName}?`)) {
-                $.ajax({
-                    // CRITICAL FIX: Ensure the route is plural
-                    url: API_BASE_URL + '/api/employees/' + employeeId,
-                    method: 'DELETE',
-                    headers: {
-                        'Authorization': 'Bearer ' + JWT_TOKEN
-                    },
-                    success: function() {
-                        alert(`${employeeName} deleted successfully.`);
-                        loadEmployees(); // Reload the list after delete
-                    },
-                    error: function(xhr) {
-                        alert(`Failed to delete employee: ${xhr.responseText || xhr.statusText}. Status: ${xhr.status}`);
-                        console.error("Delete error:", xhr);
-                    }
-                });
-            }
-        });
+            $.ajax({
+                url: API_BASE_URL + '/api/employees/' + id,
+                method: 'DELETE',
+                headers: { 'Authorization': 'Bearer ' + JWT_TOKEN },
+                success: function() { loadEmployees(); },
+                error: function(xhr) { alert('Delete failed: ' + xhr.status); }
+            });
+        }
 
-        // ⭐️ EDIT ROUTING FUNCTION ⭐️
-        $(document).on('click', '.edit-btn', function() {
-            const employeeId = $(this).data('id');
-            // Redirects to the AddEdit view with the employee ID for editing
-            location.href = '@Url.Action("AddEdit", "Employee")/' + employeeId;
-        });
-
-
-        $(document).ready(function() {
-            // Check if token is available
-            if (JWT_TOKEN) {
-                loadEmployees();
-            } else {
-                 // If the token is empty (which should have been caught by the C# controller), redirect
-                 location.href = '@Url.Action("Logout", "Auth")';
-            }
-        });
+        $(document).ready(function() { loadEmployees(); });
     </script>
 }

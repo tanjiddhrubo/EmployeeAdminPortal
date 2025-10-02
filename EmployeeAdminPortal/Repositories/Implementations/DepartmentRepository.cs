@@ -6,7 +6,7 @@ using EmployeeAdminPortal.API.Models.Entities;
 using EmployeeAdminPortal.Repositories.Interfaces;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration; // Required for connection string
-using System.Data.SqlClient; // Required for SqlConnection
+using Microsoft.Data.SqlClient; // Use Microsoft.Data.SqlClient for .NET 8
 
 namespace EmployeeAdminPortal.Repositories.Implementations
 {

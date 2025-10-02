@@ -1,0 +1,90 @@
+@{
+    ViewData["Title"] = "Manage Files";
+}
+
+<h1>Manage Files</h1>
+
+<div class="mb-3">
+    <a id="downloadCsv" class="btn btn-outline-primary">Download CSV</a>
+    <a id="downloadXlsx" class="btn btn-outline-success">Download Excel</a>
+    <a id="downloadPdf" class="btn btn-outline-danger">Download PDF</a>
+</div>
+
+<h2>Uploaded Files</h2>
+<ul id="fileList"></ul>
+
+@section Scripts {
+<script>
+    const API_BASE_URL = '@ViewBag.ApiBaseUrl';
+    const JWT_TOKEN = "@Context.Session.GetString("JwtToken")";
+
+    $(function() {
+        $('#downloadCsv').on('click', function() {
+            window.location = API_BASE_URL + '/api/files/export/employees/csv';
+        });
+        $('#downloadXlsx').on('click', function() {
+            window.location = API_BASE_URL + '/api/files/export/employees/xlsx';
+        });
+
+        $('#downloadPdf').on('click', function() {
+            downloadPdf();
+        });
+
+        // Load uploaded files
+        $.ajax({
+            url: API_BASE_URL + '/api/files/list',
+            method: 'GET',
+            headers: { 'Authorization': 'Bearer ' + JWT_TOKEN },
+            success: function(files) {
+                $('#fileList').empty();
+                if (!files || files.length === 0) {
+                    $('#fileList').append('<li>No files uploaded yet</li>');
+                    return;
+                }
+                files.forEach(function(f) {
+                    const link = API_BASE_URL + '/api/files/download/' + f;
+                    $('#fileList').append(`<li><a href="${link}">${f}</a></li>`);
+                });
+            },
+            error: function(xhr) {
+                $('#fileList').html('<li>Error loading files: ' + xhr.status + '</li>');
+            }
+        });
+    });
+
+    // Use fetch to send Authorization header and download PDF blob
+    async function downloadPdf() {
+        if (!JWT_TOKEN) {
+            alert('Not authenticated');
+            return;
+        }
+
+        try {
+            const resp = await fetch(API_BASE_URL + '/api/pdf/employees', {
+                method: 'GET',
+                headers: { 'Authorization': 'Bearer ' + JWT_TOKEN }
+            });
+
+            if (!resp.ok) {
+                const text = await resp.text();
+                console.error('PDF download failed', resp.status, text);
+                alert('Failed to download PDF: ' + resp.status);
+                return;
+            }
+
+            const blob = await resp.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'employees.pdf';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+        } catch (ex) {
+            console.error('Error downloading PDF', ex);
+            alert('Error downloading PDF');
+        }
+    }
+</script>
+}

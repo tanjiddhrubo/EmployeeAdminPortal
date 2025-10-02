@@ -1,0 +1,96 @@
+@{
+    ViewData["Title"] = "Products";
+}
+
+<h1>Product List (External API)</h1>
+<div id="productContainer">
+    <table class="table table-striped" id="productsTable">
+        <thead>
+            <tr>
+                <th>Id</th>
+                <th>Code</th>
+                <th>Name</th>
+                <th>Brand</th>
+                <th>Category</th>
+                <th>Unit</th>
+                <th>Price</th>
+                <th>Stock</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr><td colspan="8" class="text-center">Loading products...</td></tr>
+        </tbody>
+    </table>
+</div>
+
+@section Scripts {
+<script>
+    const API_BASE_URL = '@ViewBag.ApiBaseUrl';
+    const JWT_TOKEN = "@Context.Session.GetString("JwtToken")";
+
+    $(document).ready(function() {
+        loadProducts();
+    });
+
+    function loadProducts() {
+        const $tbody = $('#productsTable tbody');
+        $tbody.html('<tr><td colspan="8" class="text-center">Loading products...</td></tr>');
+
+        $.ajax({
+            url: API_BASE_URL + '/api/products',
+            method: 'GET',
+            headers: { 'Authorization': 'Bearer ' + JWT_TOKEN },
+            success: function(data) {
+                $tbody.empty();
+                const list = (typeof data === 'string') ? JSON.parse(data) : data;
+                if (!list || list.length === 0) {
+                    $tbody.append('<tr><td colspan="8" class="text-center">No products returned</td></tr>');
+                    return;
+                }
+
+                // Normalize: sometimes API returns objects directly or nested under data
+                const products = Array.isArray(list) ? list : (list.data || list.items || []);
+
+                products.forEach(p => {
+                    const id = p.Id ?? p.id ?? '';
+                    const code = p.Code ?? p.code ?? p.ProductBarcode ?? '';
+                    const name = p.Name ?? p.name ?? '';
+                    const brand = p.BrandName ?? p.brandName ?? '';
+                    const category = p.CategoryName ?? p.categoryName ?? '';
+                    const unit = p.UnitName ?? p.unitName ?? '';
+                    const price = (p.Price !== undefined && p.Price !== null) ? p.Price : (p.price ?? 0);
+                    const stock = p.stock ?? 0;
+
+                    const row = `
+                        <tr>
+                            <td>${id}</td>
+                            <td>${code}</td>
+                            <td>${escapeHtml(name)}</td>
+                            <td>${escapeHtml(brand)}</td>
+                            <td>${escapeHtml(category)}</td>
+                            <td>${escapeHtml(unit)}</td>
+                            <td>${price}</td>
+                            <td>${stock}</td>
+                        </tr>`;
+
+                    $tbody.append(row);
+                });
+            },
+            error: function(xhr) {
+                console.error('Failed to load products', xhr);
+                $tbody.html('<tr><td colspan="8" class="text-center">Failed to load products: ' + xhr.status + '</td></tr>');
+            }
+        });
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+</script>
+}
