@@ -108,10 +108,3 @@ curl -X POST "https://localhost:7115/api/employees" -H "Authorization: Bearer <t
 
 Postman collection
 - See `docs/postman_collection.json` in the repo (contains basic requests)
-
-Next steps I can complete one-by-one
-1. Seed Admin user automatically on startup (I can add code to `Program.cs`).
-2. Add PDF export generation (QuestPDF) and client UI.
-3. Add README screenshots and a short demo script.
-
-Tell me which of the above to implement next and I will proceed.
