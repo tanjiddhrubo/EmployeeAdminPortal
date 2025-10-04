@@ -5,10 +5,23 @@
 <h1>Manage Files</h1>
 
 <div class="mb-3">
-    <a id="downloadCsv" class="btn btn-outline-primary">Download CSV</a>
-    <a id="downloadXlsx" class="btn btn-outline-success">Download Excel</a>
-    <a id="downloadPdf" class="btn btn-outline-danger">Download PDF</a>
+    <button id="downloadCsv" class="btn btn-outline-primary">Download CSV</button>
+    <button id="downloadXlsx" class="btn btn-outline-success">Download Excel</button>
+    <button id="downloadPdf" class="btn btn-outline-danger">Download PDF</button>
 </div>
+
+<hr />
+
+<h2>Upload File</h2>
+<form id="uploadForm" enctype="multipart/form-data">
+    <div class="mb-3">
+        <input type="file" id="fileInput" name="file" />
+    </div>
+    <button type="submit" class="btn btn-primary">Upload</button>
+</form>
+<div id="uploadResult" class="mt-3"></div>
+
+<hr />
 
 <h2>Uploaded Files</h2>
 <ul id="fileList"></ul>
@@ -19,71 +32,155 @@
     const JWT_TOKEN = "@Context.Session.GetString("JwtToken")";
 
     $(function() {
-        $('#downloadCsv').on('click', function() {
-            window.location = API_BASE_URL + '/api/files/export/employees/csv';
-        });
-        $('#downloadXlsx').on('click', function() {
-            window.location = API_BASE_URL + '/api/files/export/employees/xlsx';
-        });
+        // download handlers use fetch so Authorization header is sent
+        $('#downloadCsv').on('click', function() { downloadResource('/api/files/export/employees/csv', 'employees.csv'); });
+        $('#downloadXlsx').on('click', function() { downloadResource('/api/files/export/employees/xlsx', 'employees.xlsx'); });
+        $('#downloadPdf').on('click', function() { downloadResource('/api/pdf/employees', 'employees.pdf'); });
 
-        $('#downloadPdf').on('click', function() {
-            downloadPdf();
+        // Upload form
+        $('#uploadForm').on('submit', async function(e) {
+            e.preventDefault();
+            $('#uploadResult').empty();
+
+            const fileInput = document.getElementById('fileInput');
+            if (!fileInput.files.length) {
+                $('#uploadResult').html('<div class="alert alert-warning">Select a file first.</div>');
+                return;
+            }
+
+            if (!JWT_TOKEN) {
+                $('#uploadResult').html('<div class="alert alert-danger">Not authenticated. Please log in.</div>');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+
+            try {
+                const resp = await fetch(API_BASE_URL + '/api/files/upload', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + JWT_TOKEN },
+                    body: formData
+                });
+
+                const text = await resp.text();
+                if (!resp.ok) {
+                    console.error('Upload failed', resp.status, text);
+                    $('#uploadResult').html('<div class="alert alert-danger">Upload failed: ' + resp.status + '</div>');
+                    if (resp.status === 403 || resp.status === 401) {
+                        $('#uploadResult').append('<div class="text-muted">Upload requires Admin role.</div>');
+                    }
+                    return;
+                }
+
+                // Try parse JSON
+                let data = null;
+                try { data = JSON.parse(text); } catch { data = null; }
+
+                if (data) {
+                    $('#uploadResult').html('<div class="alert alert-success">Uploaded: ' + (data.original || '') + ' (saved: ' + (data.fileName || '') + ')</div>');
+                } else {
+                    $('#uploadResult').html('<div class="alert alert-success">Upload successful</div>');
+                }
+
+                // refresh file list
+                loadFileList();
+            }
+            catch (ex) {
+                console.error('Upload error', ex);
+                $('#uploadResult').html('<div class="alert alert-danger">Upload error</div>');
+            }
         });
 
         // Load uploaded files
-        $.ajax({
-            url: API_BASE_URL + '/api/files/list',
-            method: 'GET',
-            headers: { 'Authorization': 'Bearer ' + JWT_TOKEN },
-            success: function(files) {
-                $('#fileList').empty();
-                if (!files || files.length === 0) {
-                    $('#fileList').append('<li>No files uploaded yet</li>');
-                    return;
-                }
-                files.forEach(function(f) {
-                    const link = API_BASE_URL + '/api/files/download/' + f;
-                    $('#fileList').append(`<li><a href="${link}">${f}</a></li>`);
-                });
-            },
-            error: function(xhr) {
-                $('#fileList').html('<li>Error loading files: ' + xhr.status + '</li>');
-            }
-        });
+        loadFileList();
     });
 
-    // Use fetch to send Authorization header and download PDF blob
-    async function downloadPdf() {
-        if (!JWT_TOKEN) {
-            alert('Not authenticated');
-            return;
-        }
-
+    async function loadFileList() {
         try {
-            const resp = await fetch(API_BASE_URL + '/api/pdf/employees', {
-                method: 'GET',
+            const resp = await fetch(API_BASE_URL + '/api/files/list', {
                 headers: { 'Authorization': 'Bearer ' + JWT_TOKEN }
             });
 
             if (!resp.ok) {
                 const text = await resp.text();
-                console.error('PDF download failed', resp.status, text);
-                alert('Failed to download PDF: ' + resp.status);
+                console.error('Failed to list files', resp.status, text);
+                $('#fileList').html('<li>Error loading files: ' + resp.status + '</li>');
                 return;
             }
 
+            const files = await resp.json();
+            $('#fileList').empty();
+            if (!files || files.length === 0) {
+                $('#fileList').append('<li>No files uploaded yet</li>');
+                return;
+            }
+
+            files.forEach(function(f) {
+                const li = $('<li/>');
+                const a = $('<a/>').attr('href', '#').text(f).on('click', function(e) {
+                    e.preventDefault();
+                    downloadFile(f);
+                });
+                li.append(a);
+                $('#fileList').append(li);
+            });
+        }
+        catch (ex) {
+            console.error('Error loading files', ex);
+            $('#fileList').html('<li>Error loading files</li>');
+        }
+    }
+
+    async function downloadFile(fileName) {
+        if (!JWT_TOKEN) { alert('Not authenticated'); return; }
+        try {
+            const resp = await fetch(API_BASE_URL + '/api/files/download/' + encodeURIComponent(fileName), {
+                headers: { 'Authorization': 'Bearer ' + JWT_TOKEN }
+            });
+            if (!resp.ok) {
+                const txt = await resp.text();
+                console.error('Download failed', resp.status, txt);
+                alert('Download failed: ' + resp.status);
+                return;
+            }
             const blob = await resp.blob();
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = 'employees.pdf';
+            a.download = fileName;
             document.body.appendChild(a);
             a.click();
             a.remove();
             window.URL.revokeObjectURL(url);
         } catch (ex) {
-            console.error('Error downloading PDF', ex);
-            alert('Error downloading PDF');
+            console.error('Error downloading file', ex);
+            alert('Error downloading file');
+        }
+    }
+
+    async function downloadResource(path, filename) {
+        if (!JWT_TOKEN) { alert('Not authenticated'); return; }
+        try {
+            const resp = await fetch(API_BASE_URL + path, { headers: { 'Authorization': 'Bearer ' + JWT_TOKEN } });
+            if (!resp.ok) {
+                const txt = await resp.text();
+                console.error('Resource download failed', resp.status, txt);
+                alert('Failed to download: ' + resp.status);
+                return;
+            }
+            const blob = await resp.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+        } catch (ex) {
+            console.error('Error downloading resource', ex);
+            alert('Error downloading resource');
         }
     }
 </script>

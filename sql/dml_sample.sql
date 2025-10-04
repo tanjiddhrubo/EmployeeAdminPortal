@@ -1,0 +1,9 @@
+-- Sample data (INSERTs)
+INSERT INTO Departments (Id, Name) VALUES ('00000000-0000-0000-0000-000000000001', 'Engineering');
+INSERT INTO Departments (Id, Name) VALUES ('00000000-0000-0000-000000000002', 'Human Resources (HR)');
+
+INSERT INTO Designations (Id, Name) VALUES ('00000000-0000-0000-0000-000000000011', 'Software Engineer');
+INSERT INTO Designations (Id, Name) VALUES ('00000000-0000-0000-0000-000000000012', 'Project Manager');
+
+INSERT INTO Employees (Id, Name, Email, Phone, Salary, DepartmentId, DesignationId)
+VALUES ('11111111-1111-1111-1111-111111111111','Alice Example','alice@example.com','1234567',75000,'00000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000011');
